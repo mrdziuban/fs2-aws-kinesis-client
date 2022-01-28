@@ -1,22 +1,22 @@
-package fs2.aws.kinesis
+package fs2.aws
+package kinesis
 
-import cats.effect.std.{ Dispatcher, Queue }
-import cats.effect.{ Async, Concurrent, Sync }
-import cats.implicits._
-import eu.timepit.refined.auto._
-import fs2.aws.core
+import cats.effect.std.{Dispatcher, Queue}
+import cats.effect.{Async, Concurrent, Sync}
+import cats.syntax.applicative._
+import cats.syntax.flatMap._
+import cats.syntax.functor._
 import fs2.concurrent.SignallingRef
-import fs2.{ Chunk, Pipe, Stream }
+import fs2.{Chunk, Pipe, Stream}
+import java.util.UUID
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient
-import software.amazon.kinesis.common.{ ConfigsBuilder, InitialPositionInStreamExtended }
+import software.amazon.kinesis.common.{ConfigsBuilder, InitialPositionInStreamExtended}
 import software.amazon.kinesis.coordinator.Scheduler
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory
 import software.amazon.kinesis.retrieval.KinesisClientRecord
 import software.amazon.kinesis.retrieval.polling.PollingConfig
-
-import java.util.UUID
 
 trait Kinesis[F[_]] {
 
@@ -65,7 +65,7 @@ trait Kinesis[F[_]] {
 
 object Kinesis {
 
-  abstract class GenericKinesis[F[_]: Async: Concurrent] extends Kinesis[F] {
+  abstract class GenericKinesis[F[_]: Async] extends Kinesis[F] {
 
     private[kinesis] def readChunksFromKinesisStream(
       streamConfig: KinesisConsumerSettings,
@@ -107,13 +107,13 @@ object Kinesis {
 
       def bypass: Pipe[F, CommittableRecord, KinesisClientRecord] = _.map(r => r.record)
 
-      _.through(core.groupBy(r => Sync[F].pure(r.shardId))).map {
+      _.through(internal.groupBy(r => Sync[F].pure(r.shardId))).map {
         case (_, st) =>
           st.broadcastThrough(checkpoint(checkpointSettings), bypass)
       }.parJoinUnbounded
     }
   }
-  def create[F[_]: Async: Concurrent](
+  def create[F[_]: Async](
     schedulerFactory: ShardRecordProcessorFactory => F[Scheduler]
   ): Kinesis[F] = new GenericKinesis[F] {
     override def readChunkedFromKinesisStream(
@@ -122,7 +122,7 @@ object Kinesis {
       readChunksFromKinesisStream(consumerConfig, schedulerFactory)
   }
 
-  def create[F[_]: Async: Concurrent](
+  def create[F[_]: Async](
     kinesisAsyncClient: KinesisAsyncClient,
     dynamoDbAsyncClient: DynamoDbAsyncClient,
     cloudWatchAsyncClient: CloudWatchAsyncClient

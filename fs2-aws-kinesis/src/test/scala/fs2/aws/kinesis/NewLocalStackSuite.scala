@@ -2,14 +2,7 @@ package fs2.aws.kinesis
 
 import cats.effect.unsafe.IORuntime
 import cats.effect.{ IO, Resource }
-import com.amazonaws.auth.{ AWSStaticCredentialsProvider, BasicAWSCredentials }
-import com.amazonaws.services.kinesis.producer.KinesisProducerConfiguration
-import fs2.Stream
-import fs2.aws.internal.KinesisProducerClientImpl
-import fs2.aws.kinesis.publisher.writeToKinesis
-import io.laserdisc.pure.cloudwatch.tagless.{ Interpreter => CloudwatchInterpreter }
-import io.laserdisc.pure.dynamodb.tagless.{ Interpreter => DynamoDbInterpreter }
-import io.laserdisc.pure.kinesis.tagless.{ Interpreter => KinesisInterpreter }
+import fs2.aws.utils.CompletableFutureEff
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -31,7 +24,6 @@ import software.amazon.awssdk.services.kinesis.{ KinesisAsyncClient, KinesisAsyn
 import software.amazon.kinesis.common.InitialPositionInStream
 
 import java.net.URI
-import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.DurationInt
@@ -47,7 +39,6 @@ class NewLocalStackSuite extends AnyFlatSpec with Matchers with ScalaFutures {
     PatienceConfig(timeout = scaled(Span(2, Minutes)), interval = scaled(Span(1, Second)))
 
   val streamName = "test"
-
   val partitionKey = "test"
 
   val consumerConfig = KinesisConsumerSettings(
@@ -57,18 +48,6 @@ class NewLocalStackSuite extends AnyFlatSpec with Matchers with ScalaFutures {
     endpoint = Some("http://localhost:4566"),
     retrievalMode = Polling
   )
-
-  val credentials =
-    new BasicAWSCredentials("dummy", "dummy")
-
-  val producerConfig = new KinesisProducerConfiguration()
-    .setCredentialsProvider(new AWSStaticCredentialsProvider(credentials))
-    .setKinesisEndpoint("localhost")
-    .setKinesisPort(4566)
-    .setCloudwatchEndpoint("localhost")
-    .setCloudwatchPort(4566)
-    .setVerifyCertificate(false)
-    .setRegion("us-east-1")
 
   val cp = StaticCredentialsProvider.create(AwsBasicCredentials.create("dummy", "dummy"))
 
@@ -89,31 +68,16 @@ class NewLocalStackSuite extends AnyFlatSpec with Matchers with ScalaFutures {
       .region(Region.US_EAST_1)
       .endpointOverride(URI.create("http://localhost:4566"))
 
-  "The Kinesis producer and consumer" should "be able to produce to and consume from LocalStack" in {
+  "The Kinesis consumer" should "be able to consume from LocalStack" in {
 
     val data = List("foo", "bar", "baz")
 
-    val test = kAlgebraResource(kac, dac, cac).use {
-      case (_, kAlgebra) =>
-        for {
-          _ <- Stream
-                .emits(data)
-                .map(d => (partitionKey, ByteBuffer.wrap(d.getBytes)))
-                .through(
-                  writeToKinesis[IO](
-                    streamName,
-                    producer = new KinesisProducerClientImpl[IO](Some(producerConfig))
-                  )
-                )
-                .compile
-                .drain
-          record <- kAlgebra
-                     .readFromKinesisStream(consumerConfig)
-                     .take(data.length)
-                     .compile
-                     .toList
-        } yield record
-
+    val test = kAlgebraResource(kac, dac, cac).use { case (_, kAlgebra) =>
+      kAlgebra
+        .readFromKinesisStream(consumerConfig)
+        .take(data.length.toLong)
+        .compile
+        .toList
     }
     val records = test.unsafeToFuture().futureValue
 
@@ -137,41 +101,33 @@ class NewLocalStackSuite extends AnyFlatSpec with Matchers with ScalaFutures {
     val resource = for {
       r @ (kAsyncInterpreter, _) <- kAlgebraResource(kac, dac, cac)
       _ <- Resource.make(
-            kAsyncInterpreter.createStream(
+            CompletableFutureEff[IO](kAsyncInterpreter.createStream(
               CreateStreamRequest.builder().streamName(sn).shardCount(1).build()
-            )
+            ))
           )(_ =>
-            kAsyncInterpreter
+            CompletableFutureEff[IO](kAsyncInterpreter
               .deleteStream(DeleteStreamRequest.builder().streamName(sn).build())
-              .void
+            ).void
           )
     } yield r
 
-    val producer = new KinesisProducerClientImpl[IO](Some(producerConfig))
     val test = resource.use {
       case (kAsyncInterpreter, kStreamInterpreter) =>
         for {
-
-          _ <- Stream
-                .emits(data)
-                .map(d => (d, ByteBuffer.wrap(d.getBytes)))
-                .through(writeToKinesis[IO](sn, producer = producer))
-                .compile
-                .drain
-          _ <- kAsyncInterpreter.updateShardCount(
+          _ <- CompletableFutureEff[IO](kAsyncInterpreter.updateShardCount(
                 UpdateShardCountRequest.builder().streamName(sn).targetShardCount(2).build()
-              )
+              ))
           _ <- fs2.Stream
                 .retry(
-                  kAsyncInterpreter
+                  CompletableFutureEff[IO](kAsyncInterpreter
                     .describeStream(
                       DescribeStreamRequest.builder().streamName(sn).build()
                     )
-                    .flatMap { r =>
-                      if (r.streamDescription().shards().size() != 2)
-                        IO.raiseError(new RuntimeException("Expected 2 shards"))
-                      else IO.unit
-                    },
+                  ).flatMap { r =>
+                    if (r.streamDescription().shards().size() != 2)
+                      IO.raiseError(new RuntimeException("Expected 2 shards"))
+                    else IO.unit
+                  },
                   2 seconds,
                   _.*(2),
                   5,
@@ -179,15 +135,9 @@ class NewLocalStackSuite extends AnyFlatSpec with Matchers with ScalaFutures {
                 )
                 .compile
                 .drain
-          _ <- Stream
-                .emits(List("foo1", "bar1", "baz1"))
-                .map(d => (d, ByteBuffer.wrap(d.getBytes)))
-                .through(writeToKinesis[IO](sn, producer = producer))
-                .compile
-                .drain
           record <- kStreamInterpreter
                      .readFromKinesisStream(consumerConfig)
-                     .take(data.length * 2)
+                     .take((data.length * 2).toLong)
                      .compile
                      .toList
 
@@ -209,14 +159,10 @@ class NewLocalStackSuite extends AnyFlatSpec with Matchers with ScalaFutures {
     kac: KinesisAsyncClientBuilder,
     dac: DynamoDbAsyncClientBuilder,
     cac: CloudWatchAsyncClientBuilder
-  ) =
+  ): Resource[IO, (KinesisAsyncClient, Kinesis[IO])] =
     for {
-      d                  <- DynamoDbInterpreter[IO].DynamoDbAsyncClientResource(dac)
-      c                  <- CloudwatchInterpreter[IO].CloudWatchAsyncClientResource(cac)
-      i                  = KinesisInterpreter[IO]
-      k                  <- i.KinesisAsyncClientResource(kac)
-      kinesisInterpreter = i.create(k)
-      kAlgebra           = Kinesis.create[IO](k, d, c)
-    } yield kinesisInterpreter -> kAlgebra
-
+      k <- Resource.fromAutoCloseable(IO(kac.build))
+      d <- Resource.fromAutoCloseable(IO(dac.build))
+      c <- Resource.fromAutoCloseable(IO(cac.build))
+    } yield k -> Kinesis.create[IO](k, d, c)
 }

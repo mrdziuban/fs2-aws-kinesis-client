@@ -3,7 +3,6 @@ package fs2.aws.kinesis
 import cats.effect.IO
 import cats.effect.unsafe.IORuntime
 import cats.implicits._
-import eu.timepit.refined.auto._
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito._
 import org.scalatest.BeforeAndAfterEach
@@ -164,13 +163,13 @@ class NewKinesisConsumerSpec
 
   it should "delay the end of shard checkpoint until all messages are drained" in new WorkerContext
     with TestData {
-    val nRecords = 5
+    val nRecords = 5L
     val res: Seq[KinesisClientRecord] = (
       stream
         .take(nRecords)
         //emulate message processing latency to reproduce the situation when End of Shard arrives BEFORE
         // all in-flight records are done
-        .parEvalMap(3)(msg => IO.sleep(200 millis) >> IO.pure(msg))
+        .parEvalMap(3)(msg => IO.sleep(200.millis) >> IO.pure(msg))
         .through(
           k.checkpointRecords(
             KinesisCheckpointSettings(maxBatchSize = Int.MaxValue, maxBatchWait = 500.millis)
@@ -183,11 +182,11 @@ class NewKinesisConsumerSpec
       IO.blocking {
         shard1Guard.await()
         recordProcessor.initialize(initializationInput)
-        (1 to nRecords).foreach { i =>
+        (1L to nRecords).foreach { i =>
           val record = mock(classOf[KinesisClientRecord])
           when(record.sequenceNumber()).thenReturn(i.toString)
           recordProcessor.processRecords(
-            recordsInput.isAtShardEnd(i == 5).records(List(record)).build()
+            recordsInput.isAtShardEnd(i == 5L).records(List(record)).build()
           )
         }
       } >> IO.blocking {
@@ -230,8 +229,8 @@ class NewKinesisConsumerSpec
     val checkpointerShard2 = mock(classOf[ShardRecordProcessorCheckpointer])
 
     val lastRecordSemaphore = new Semaphore(1)
-    val input = (1 to 6) map { i =>
-      if (i <= 3) {
+    val input = (1L to 6L) map { i =>
+      if (i <= 3L) {
         val record = mock(classOf[KinesisClientRecord])
         when(record.sequenceNumber()).thenReturn(i.toString)
         new CommittableRecord(
@@ -336,7 +335,7 @@ class NewKinesisConsumerSpec
     val record              = mock(classOf[KinesisClientRecord])
     when(record.sequenceNumber()).thenReturn("1")
 
-    val input = (1 to 100).map(idx =>
+    val input = (1L to 100L).map(idx =>
       new CommittableRecord(
         s"shard-1",
         mock(classOf[ExtendedSequenceNumber]),
@@ -386,7 +385,7 @@ class NewKinesisConsumerSpec
     val k = Kinesis.create[IO](builder)
     val stream: fs2.Stream[IO, CommittableRecord] =
       k.readFromKinesisStream(config)
-        .evalTap(_ => IO.sleep(100 millis))
+        .evalTap(_ => IO.sleep(100.millis))
         .map(i => if (errorStream) throw new Exception("boom") else i)
         .onFinalize(IO.delay(latch.countDown()))
     val settings =

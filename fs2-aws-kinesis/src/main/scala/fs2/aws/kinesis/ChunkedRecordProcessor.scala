@@ -2,14 +2,12 @@ package fs2
 package aws
 package kinesis
 
-import java.util.concurrent.Semaphore
-
 import fs2.Chunk
+import java.util.concurrent.Semaphore
+import scala.jdk.CollectionConverters._
 import software.amazon.kinesis.lifecycle.events._
 import software.amazon.kinesis.processor.ShardRecordProcessor
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber
-
-import scala.jdk.CollectionConverters._
 
 /** Concrete implementation of the AWS RecordProcessor interface.
   * Wraps incoming records into CommitableRecord types to allow for downstream

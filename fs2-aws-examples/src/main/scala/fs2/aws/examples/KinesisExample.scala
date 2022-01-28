@@ -35,7 +35,7 @@ object KinesisExample extends IOApp {
       program[IO](kinesis, appConfig.consumerConfig, appConfig.producerConfig).as(ExitCode.Success)
     )
   }
-  private def kAlgebraResource[F[_]: Async: Concurrent](
+  private def kAlgebraResource[F[_]: Async](
     kac: KinesisAsyncClientBuilder,
     dac: DynamoDbAsyncClientBuilder,
     cac: CloudWatchAsyncClientBuilder,
@@ -49,7 +49,7 @@ object KinesisExample extends IOApp {
       _                  <- disposableStream(kinesisInterpreter, streamName)
     } yield Kinesis.create[F](k, d, c)
 
-  def program[F[_]: Async: Concurrent: Temporal: NonEmptyParallel](
+  def program[F[_]: Async: NonEmptyParallel](
     kinesis: Kinesis[F],
     consumerSettings: KinesisConsumerSettings,
     producerConfiguration: KinesisProducerConfiguration

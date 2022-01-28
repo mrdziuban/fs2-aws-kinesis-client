@@ -1,12 +1,15 @@
 package fs2.aws
 
-import cats.effect.{ Concurrent, Ref }
-import cats.implicits._
+import cats.effect.{Concurrent, Ref}
 import cats.effect.std.Queue
-import fs2.{ Pipe, Stream }
+import cats.syntax.apply._
+import cats.syntax.flatMap._
+import cats.syntax.foldable._
+import cats.syntax.functor._
+import cats.syntax.option._
+import fs2.{Pipe, Stream}
 
-package object core {
-
+package object internal {
   /** Helper flow to group elements of a stream into K substreams.
     * Grows with the number of distinct 'K' selectors
     *
@@ -25,9 +28,7 @@ package object core {
     selector: A => F[K]
   )(implicit F: Concurrent[F]): Pipe[F, A, (K, Stream[F, A])] = { in =>
     Stream.eval(Ref.of[F, Map[K, Queue[F, Option[A]]]](Map.empty)).flatMap { queueMap =>
-      val cleanup = {
-        queueMap.get.flatMap(_.values.toList.traverse_(_.offer(None)))
-      }
+      val cleanup = queueMap.get.flatMap(_.values.toList.traverse_(_.offer(None)))
 
       (in ++ Stream.exec(cleanup))
         .evalMap { elem =>

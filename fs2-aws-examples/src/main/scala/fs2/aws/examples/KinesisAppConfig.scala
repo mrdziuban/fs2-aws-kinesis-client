@@ -20,7 +20,7 @@ import java.util.Date
 
 case class KinesisAppConfig(
   awsHost: String,
-  awsPort: Int,
+  awsPort: Long,
   awsRegion: Region,
   awsKeyId: String,
   awsKey: String,
@@ -30,7 +30,7 @@ case class KinesisAppConfig(
 object KinesisAppConfig {
   def localstackConfig: KinesisAppConfig = KinesisAppConfig(
     awsHost = "localhost",
-    awsPort = 4566,
+    awsPort = 4566L,
     awsRegion = Region.US_EAST_1,
     awsKeyId = "dummy",
     awsKey = "dummy",
