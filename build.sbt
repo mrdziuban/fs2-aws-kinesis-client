@@ -1,14 +1,13 @@
-Global / onChangedBuildSource := ReloadOnSourceChanges
-
 lazy val scala213 = "2.13.8"
-
-ThisBuild / scalaVersion := scala213
-
 lazy val fs2Version = "3.2.4"
 lazy val scalaTestVersion = "3.2.10"
 lazy val mockitoScalaTestVersion = "1.17.0"
 lazy val mockitoCoreVersion = "4.3.1"
 lazy val catsEffectVersion = "3.3.0"
+
+Global / onChangedBuildSource := ReloadOnSourceChanges
+
+ThisBuild / scalaVersion := scala213
 
 lazy val baseSettings = Seq(
   organization := "io.laserdisc",
@@ -47,8 +46,6 @@ lazy val `fs2-aws-kinesis-client` = project.in(file("."))
       "ch.qos.logback" % "logback-classic" % "1.2.10" % Test,
       "ch.qos.logback" % "logback-core" % "1.2.10" % Test
     ),
-    coverageMinimumStmtTotal := 40,
-    coverageFailOnMinimum    := true
   )
 
 lazy val `fs2-aws-kinesis-examples` = project.in(file("examples"))
@@ -58,5 +55,3 @@ lazy val `fs2-aws-kinesis-examples` = project.in(file("examples"))
   )
   .dependsOn(`fs2-aws-kinesis-client`)
   .aggregate(`fs2-aws-kinesis-client`)
-
-addCommandAlias("build", ";clean;+test;coverage")
