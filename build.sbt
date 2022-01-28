@@ -33,10 +33,10 @@ lazy val baseSettings = Seq(
   addCompilerPlugin("org.typelevel" % "kind-projector" % "0.13.2" cross CrossVersion.full),
 )
 
-lazy val `fs2-aws-kinesis` = (project in file("fs2-aws-kinesis"))
+lazy val `fs2-aws-kinesis-client` = project.in(file("."))
   .settings(baseSettings)
   .settings(
-    name := "fs2-aws-kinesis",
+    name := "fs2-aws-kinesis-client",
     libraryDependencies ++= Seq(
       "co.fs2" %% "fs2-core" % fs2Version,
       "co.fs2" %% "fs2-io" % fs2Version,
@@ -50,5 +50,13 @@ lazy val `fs2-aws-kinesis` = (project in file("fs2-aws-kinesis"))
     coverageMinimumStmtTotal := 40,
     coverageFailOnMinimum    := true
   )
+
+lazy val `fs2-aws-kinesis-examples` = project.in(file("examples"))
+  .settings(baseSettings)
+  .settings(
+    name := "fs2-aws-kinesis-examples"
+  )
+  .dependsOn(`fs2-aws-kinesis-client`)
+  .aggregate(`fs2-aws-kinesis-client`)
 
 addCommandAlias("build", ";clean;+test;coverage")

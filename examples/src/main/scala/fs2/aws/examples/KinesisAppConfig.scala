@@ -1,8 +1,6 @@
 package fs2.aws.examples
 
 import cats.implicits._
-import com.amazonaws.auth.{ AWSStaticCredentialsProvider, BasicAWSCredentials }
-import com.amazonaws.services.kinesis.producer.KinesisProducerConfiguration
 import fs2.aws.kinesis.{ KinesisConsumerSettings, Polling }
 import software.amazon.awssdk.auth.credentials.{ AwsBasicCredentials, StaticCredentialsProvider }
 import software.amazon.awssdk.awscore.client.builder.AwsClientBuilder
@@ -40,11 +38,10 @@ object KinesisAppConfig {
 }
 
 object syntax {
+  implicit class ConfigExtensions(private val kinesisAppConfig: KinesisAppConfig) extends AnyVal {
+    private def cp = StaticCredentialsProvider.create(
+      AwsBasicCredentials.create(kinesisAppConfig.awsKeyId, kinesisAppConfig.awsKey))
 
-  implicit class ConfigExtensions(kinesisAppConfig: KinesisAppConfig) {
-    private val cp = StaticCredentialsProvider.create(
-      AwsBasicCredentials.create(kinesisAppConfig.awsKeyId, kinesisAppConfig.awsKey)
-    )
     private def overwriteStuff[B <: AwsClientBuilder[B, C], C](
       awsClientBuilder: AwsClientBuilder[B, C]
     ) =
@@ -57,8 +54,7 @@ object syntax {
 
     def kinesisSdkBuilder: KinesisAsyncClientBuilder = overwriteStuff(KinesisAsyncClient.builder())
     def dynamoSdkBuilder: DynamoDbAsyncClientBuilder = overwriteStuff(DynamoDbAsyncClient.builder())
-    def cloudwatchSdkBuilder: CloudWatchAsyncClientBuilder =
-      overwriteStuff(CloudWatchAsyncClient.builder())
+    def cloudwatchSdkBuilder: CloudWatchAsyncClientBuilder = overwriteStuff(CloudWatchAsyncClient.builder())
 
     def consumerConfig: KinesisConsumerSettings = KinesisConsumerSettings(
       kinesisAppConfig.streamName,
@@ -67,20 +63,5 @@ object syntax {
       endpoint = Some(s"http://${kinesisAppConfig.awsHost}:${kinesisAppConfig.awsPort}"),
       retrievalMode = Polling
     )
-
-    def producerConfig: KinesisProducerConfiguration = {
-      val credentials = new BasicAWSCredentials(kinesisAppConfig.awsKeyId, kinesisAppConfig.awsKey)
-
-      new KinesisProducerConfiguration()
-        .setCredentialsProvider(new AWSStaticCredentialsProvider(credentials))
-        .setKinesisEndpoint(kinesisAppConfig.awsHost)
-        .setKinesisPort(kinesisAppConfig.awsPort)
-        .setCloudwatchEndpoint(kinesisAppConfig.awsHost)
-        .setCloudwatchPort(kinesisAppConfig.awsPort)
-        .setVerifyCertificate(false)
-        .setRegion(kinesisAppConfig.awsRegion.id())
-    }
-
   }
-
 }

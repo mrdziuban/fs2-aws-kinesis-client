@@ -1,8 +1,8 @@
-package fs2.aws.kinesis
+package fs2.aws
+package kinesis
 
 import cats.effect.unsafe.IORuntime
 import cats.effect.{ IO, Resource }
-import fs2.aws.utils.CompletableFutureEff
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -101,11 +101,11 @@ class NewLocalStackSuite extends AnyFlatSpec with Matchers with ScalaFutures {
     val resource = for {
       r @ (kAsyncInterpreter, _) <- kAlgebraResource(kac, dac, cac)
       _ <- Resource.make(
-            CompletableFutureEff[IO](kAsyncInterpreter.createStream(
+            clientOp[IO](kAsyncInterpreter.createStream(
               CreateStreamRequest.builder().streamName(sn).shardCount(1).build()
             ))
           )(_ =>
-            CompletableFutureEff[IO](kAsyncInterpreter
+            clientOp[IO](kAsyncInterpreter
               .deleteStream(DeleteStreamRequest.builder().streamName(sn).build())
             ).void
           )
@@ -114,12 +114,12 @@ class NewLocalStackSuite extends AnyFlatSpec with Matchers with ScalaFutures {
     val test = resource.use {
       case (kAsyncInterpreter, kStreamInterpreter) =>
         for {
-          _ <- CompletableFutureEff[IO](kAsyncInterpreter.updateShardCount(
+          _ <- clientOp[IO](kAsyncInterpreter.updateShardCount(
                 UpdateShardCountRequest.builder().streamName(sn).targetShardCount(2).build()
               ))
           _ <- fs2.Stream
                 .retry(
-                  CompletableFutureEff[IO](kAsyncInterpreter
+                  clientOp[IO](kAsyncInterpreter
                     .describeStream(
                       DescribeStreamRequest.builder().streamName(sn).build()
                     )
@@ -161,8 +161,8 @@ class NewLocalStackSuite extends AnyFlatSpec with Matchers with ScalaFutures {
     cac: CloudWatchAsyncClientBuilder
   ): Resource[IO, (KinesisAsyncClient, Kinesis[IO])] =
     for {
-      k <- Resource.fromAutoCloseable(IO(kac.build))
-      d <- Resource.fromAutoCloseable(IO(dac.build))
-      c <- Resource.fromAutoCloseable(IO(cac.build))
-    } yield k -> Kinesis.create[IO](k, d, c)
+      k <- clientResource[IO](kac)
+      d <- clientResource[IO](dac)
+      c <- clientResource[IO](cac)
+    } yield (k, Kinesis.create[IO](k, d, c))
 }
