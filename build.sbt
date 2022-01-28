@@ -51,6 +51,4 @@ lazy val `fs2-aws-kinesis` = (project in file("fs2-aws-kinesis"))
     coverageFailOnMinimum    := true
   )
 
-addCommandAlias("format", ";scalafmt;test:scalafmt;scalafmtSbt")
-addCommandAlias("checkFormat", ";scalafmtCheck;test:scalafmtCheck;scalafmtSbtCheck")
-addCommandAlias("build", ";checkFormat;clean;+test;coverage")
+addCommandAlias("build", ";clean;+test;coverage")
