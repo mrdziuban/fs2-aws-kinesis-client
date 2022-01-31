@@ -9,11 +9,13 @@ import cats.syntax.functor._
 import fs2.concurrent.SignallingRef
 import fs2.{Chunk, Pipe, Stream}
 import java.util.UUID
+import scala.jdk.CollectionConverters._
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient
 import software.amazon.kinesis.common.{ConfigsBuilder, InitialPositionInStreamExtended}
 import software.amazon.kinesis.coordinator.Scheduler
+import software.amazon.kinesis.metrics.MetricsUtil
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory
 import software.amazon.kinesis.retrieval.KinesisClientRecord
 import software.amazon.kinesis.retrieval.polling.PollingConfig
@@ -64,9 +66,7 @@ trait Kinesis[F[_]] {
 }
 
 object Kinesis {
-
   abstract class GenericKinesis[F[_]: Async] extends Kinesis[F] {
-
     private[kinesis] def readChunksFromKinesisStream(
       streamConfig: KinesisConsumerSettings,
       schedulerFactory: ShardRecordProcessorFactory => F[Scheduler]
@@ -105,7 +105,7 @@ object Kinesis {
           .collect { case chunk if chunk.size > 0 => chunk.toList.max }
           .flatMap(cr => fs2.Stream.eval(cr.checkpoint.as(cr.record)).drain)
 
-      def bypass: Pipe[F, CommittableRecord, KinesisClientRecord] = _.map(r => r.record)
+      def bypass: Pipe[F, CommittableRecord, KinesisClientRecord] = _.map(_.record)
 
       _.through(internal.groupBy(r => Sync[F].pure(r.shardId))).map {
         case (_, st) =>
@@ -113,6 +113,7 @@ object Kinesis {
       }.parJoinUnbounded
     }
   }
+
   def create[F[_]: Async](
     schedulerFactory: ShardRecordProcessorFactory => F[Scheduler]
   ): Kinesis[F] = new GenericKinesis[F] {
@@ -145,6 +146,10 @@ object Kinesis {
         recordProcessorFactory
       )
 
+      val metricsConfig = configsBuilder.metricsConfig.metricsEnabledDimensions(
+        Set(MetricsUtil.OPERATION_DIMENSION_NAME, MetricsUtil.SHARD_ID_DIMENSION_NAME).asJava
+      )
+
       val retrievalConfig = configsBuilder.retrievalConfig()
 
       settings.retrievalMode match {
@@ -170,7 +175,7 @@ object Kinesis {
         configsBuilder.coordinatorConfig(),
         configsBuilder.leaseManagementConfig(),
         configsBuilder.lifecycleConfig(),
-        configsBuilder.metricsConfig(),
+        metricsConfig,
         configsBuilder.processorConfig(),
         retrievalConfig
       ).pure[F]

@@ -42,7 +42,7 @@ package object internal {
                   // Enqueue the element lifted into an Option to the new queue
                   _ <- newQ.offer(elem.some)
                 } yield (key -> Stream.fromQueueNoneTerminated(newQ, 100)).some
-              }(_.offer(elem.some) as None)
+              }(_.offer(elem.some).as(None))
           }.flatten
         }
         .unNone
