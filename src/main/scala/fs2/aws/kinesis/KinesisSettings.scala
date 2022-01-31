@@ -1,6 +1,5 @@
 package fs2.aws.kinesis
 
-import fs2.aws.internal.Exceptions._
 import java.net.URI
 import java.util.Date
 import scala.concurrent.duration._
@@ -71,17 +70,6 @@ object KinesisCheckpointSettings {
   def apply(
     maxBatchSize: Int,
     maxBatchWait: FiniteDuration
-  ): Either[Throwable, KinesisCheckpointSettings] =
-    (maxBatchSize, maxBatchWait) match {
-      case (s, _) if s <= 0 =>
-        Left(MaxBatchSizeException("Must be greater than 0"))
-      case (_, w) if w <= 0.milliseconds =>
-        Left(
-          MaxBatchWaitException(
-            "Must be greater than 0 milliseconds. To checkpoint immediately, pass 1 to the max batch size."
-          )
-        )
-      case (s, w) =>
-        Right(new KinesisCheckpointSettings(s, w))
-    }
+  ): KinesisCheckpointSettings =
+    new KinesisCheckpointSettings(maxBatchSize, maxBatchWait)
 }
