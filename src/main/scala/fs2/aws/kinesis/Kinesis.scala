@@ -39,7 +39,7 @@ trait Kinesis[F[_]] {
     * @return an infinite fs2 Stream that emits Kinesis Records
     */
   def readFromKinesisStream(consumerConfig: KinesisConsumerSettings): Stream[F, CommittableRecord] =
-    readChunkedFromKinesisStream(consumerConfig).flatMap(fs2.Stream.chunk)
+    readChunkedFromKinesisStream(consumerConfig).flatMap(Stream.chunk)
 
   /** Initialize a worker and start streaming records from a Kinesis stream
     * On stream finish (due to error or other), worker will be shutdown
@@ -76,7 +76,7 @@ object Kinesis {
         dispatcher: Dispatcher[F],
         queue: Queue[F, Chunk[CommittableRecord]],
         signal: SignallingRef[F, Boolean]
-      ): fs2.Stream[F, Scheduler] =
+      ): Stream[F, Scheduler] =
         Stream.bracket {
           schedulerFactory(() =>
             new ChunkedRecordProcessor(records => dispatcher.unsafeRunSync(queue.offer(records)))
@@ -96,7 +96,7 @@ object Kinesis {
       } yield stream
     }
     def checkpointRecords(
-      checkpointSettings: KinesisCheckpointSettings // = KinesisCheckpointSettings.defaultInstance
+      checkpointSettings: KinesisCheckpointSettings
     ): Pipe[F, CommittableRecord, KinesisClientRecord] = {
       def checkpoint(
         checkpointSettings: KinesisCheckpointSettings

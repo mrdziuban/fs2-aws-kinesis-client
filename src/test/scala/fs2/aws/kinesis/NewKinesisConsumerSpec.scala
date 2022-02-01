@@ -173,7 +173,6 @@ class NewKinesisConsumerSpec
         .through(
           k.checkpointRecords(
             KinesisCheckpointSettings(maxBatchSize = Int.MaxValue, maxBatchWait = 500.millis)
-              .getOrElse(throw new Error())
           )
         )
         .compile
@@ -390,7 +389,6 @@ class NewKinesisConsumerSpec
         .onFinalize(IO.delay(latch.countDown()))
     val settings =
       KinesisCheckpointSettings(maxBatchSize = Int.MaxValue, maxBatchWait = 500.millis)
-        .getOrElse(throw new Error())
 
     val checkpointerShard1 = mock(classOf[ShardRecordProcessorCheckpointer])
 
