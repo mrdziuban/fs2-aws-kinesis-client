@@ -1,6 +1,5 @@
 package fs2.aws.kinesis
 
-import java.net.URI
 import java.util.Date
 import scala.concurrent.duration._
 import software.amazon.awssdk.regions.Region
@@ -20,10 +19,8 @@ class KinesisConsumerSettings private (
   val streamName: String,
   val appName: String,
   val region: Region,
-  val maxConcurrency: Int,
   val bufferSize: Int,
   val initialPositionInStream: Either[InitialPositionInStream, Date],
-  val endpoint: Option[URI],
   val retrievalMode: RetrievalMode
 )
 
@@ -32,20 +29,16 @@ object KinesisConsumerSettings {
     streamName: String,
     appName: String,
     region: Region = Region.US_EAST_1,
-    maxConcurrency: Int = 100,
     bufferSize: Int = 10,
     initialPositionInStream: Either[InitialPositionInStream, Date] = Left(InitialPositionInStream.LATEST),
-    endpoint: Option[String] = None,
     retrievalMode: RetrievalMode = FanOut
   ): KinesisConsumerSettings =
     new KinesisConsumerSettings(
       streamName,
       appName,
       region,
-      maxConcurrency,
       bufferSize,
       initialPositionInStream,
-      endpoint.map(URI.create),
       retrievalMode
     )
 }
